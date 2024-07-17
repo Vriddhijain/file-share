@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time File Sharing</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet"> <!-- Link to your custom styles.css -->
+    <style>
+        /* Additional custom styles can be added here */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">Real-Time File Sharing</h1>
+
+        <div id="authSection" class="auth-section">
+            <h3 class="section-header">Register</h3>
+            <form id="registerForm">
+                <div class="form-group">
+                    <input type="text" id="registerUsername" class="form-control" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="registerPassword" class="form-control" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Register</button>
+            </form>
+
+            <h3 class="section-header">Login</h3>
+            <form id="loginForm">
+                <div class="form-group">
+                    <input type="text" id="loginUsername" class="form-control" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" class="form-control" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+        </div>
+
+        <div id="fileSection" class="file-section" style="display: none;">
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <h3 class="section-header">Share a File</h3>
+                    <form id="uploadForm" class="form-inline" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <input type="file" name="file" id="fileInput" class="form-control-file" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Upload</button>
+                    </form>
+                    <!-- Progress indicator placeholder -->
+                    <div id="uploadProgress" class="progress mt-3" style="display: none;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h3 class="section-header">Received Files</h3>
+                    <ul id="fileList" class="list-group file-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let authToken = '';
+
+        const authSection = document.getElementById('authSection');
+        const fileSection = document.getElementById('fileSection');
+        const registerForm = document.getElementById('registerForm');
+        const loginForm = document.getElementById('loginForm');
+        const uploadForm = document.getElementById('uploadForm');
+        const fileList = document.getElementById('fileList');
+        const uploadProgress = document.getElementById('uploadProgress');
+
+        registerForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (response.ok) {
+                alert('Registration successful');
+            } else {
+                alert('Registration failed');
+            }
+        });
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                authToken = data.token;
+                authSection.style.display = 'none';
+                fileSection.style.display = 'block';
+            } else {
+                alert('Login failed');
+            }
+        });
+
+        uploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const formData = new FormData(uploadForm);
+
+            // Display upload progress indicator
+            uploadProgress.style.display = 'block';
+
+            fetch('/upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': authToken
+                },
+                body: formData,
+                // Handle progress of upload
+                onUploadProgress: (progressEvent) => {
+                    const { loaded, total } = progressEvent;
+                    const percentComplete = (loaded / total) * 100;
+                    uploadProgress.querySelector('.progress-bar').style.width = percentComplete + '%';
+                }
+            }).then(response => {
+                uploadProgress.style.display = 'none'; // Hide progress bar after upload
+                if (response.ok) {
+                    alert('File uploaded successfully');
+                } else {
+                    alert('File upload failed');
+                }
+            });
+        });
+
+        socket.on('fileUploaded', (data) => {
+            const listItem = document.createElement('li');
+            listItem.classList.add('list-group-item');
+            const link = document.createElement('a');
+            link.href = `/${data.path}`;
+            link.textContent = data.filename;
+            link.download = data.filename;
+            listItem.appendChild(link);
+            fileList.appendChild(listItem);
+        });
+    </script>
+</body>
+</html>
+
